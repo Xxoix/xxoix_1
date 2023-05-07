@@ -1,31 +1,273 @@
-﻿
-Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.33529.622
-MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "music suhang", "music suhang.vcxproj", "{7F7ABDD3-22B9-4256-B225-90BBC8A9EB70}"
-EndProject
-Global
-	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-		Debug|x64 = Debug|x64
-		Debug|x86 = Debug|x86
-		Release|x64 = Release|x64
-		Release|x86 = Release|x86
-	EndGlobalSection
-	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{7F7ABDD3-22B9-4256-B225-90BBC8A9EB70}.Debug|x64.ActiveCfg = Debug|x64
-		{7F7ABDD3-22B9-4256-B225-90BBC8A9EB70}.Debug|x64.Build.0 = Debug|x64
-		{7F7ABDD3-22B9-4256-B225-90BBC8A9EB70}.Debug|x86.ActiveCfg = Debug|Win32
-		{7F7ABDD3-22B9-4256-B225-90BBC8A9EB70}.Debug|x86.Build.0 = Debug|Win32
-		{7F7ABDD3-22B9-4256-B225-90BBC8A9EB70}.Release|x64.ActiveCfg = Release|x64
-		{7F7ABDD3-22B9-4256-B225-90BBC8A9EB70}.Release|x64.Build.0 = Release|x64
-		{7F7ABDD3-22B9-4256-B225-90BBC8A9EB70}.Release|x86.ActiveCfg = Release|Win32
-		{7F7ABDD3-22B9-4256-B225-90BBC8A9EB70}.Release|x86.Build.0 = Release|Win32
-	EndGlobalSection
-	GlobalSection(SolutionProperties) = preSolution
-		HideSolutionNode = FALSE
-	EndGlobalSection
-	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {49CDAFF4-A682-436B-84C2-0F4E6466A91A}
-	EndGlobalSection
-EndGlobal
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+
+#define MIDI_HEADER_SIZE 14
+#define TRACK_HEADER_SIZE 8
+#define META_EVENT_MARKER 0xFF
+
+typedef struct {
+    uint32_t deltaTime;
+    uint8_t status;
+    uint8_t data1;
+    uint8_t data2;
+} MidiEvent;
+
+void writeMidiHeader(FILE* file, uint16_t formatType, uint16_t trackCount, uint16_t timeDivision) {
+    uint8_t header[MIDI_HEADER_SIZE] = {
+        'M', 'T', 'h', 'd', 0x00, 0x00, 0x00, 0x06, // MThd header and length
+        (formatType >> 8) & 0xFF, formatType & 0xFF, // format type
+        (trackCount >> 8) & 0xFF, trackCount & 0xFF, // number of tracks
+        (timeDivision >> 8) & 0xFF, timeDivision & 0xFF // time division
+    };
+    fwrite(header, sizeof(header), 1, file);
+}
+
+void writeTrackHeader(FILE* file, uint32_t trackLength) {
+    uint8_t header[TRACK_HEADER_SIZE] = {
+        'M', 'T', 'r', 'k', // MTrk header
+        (trackLength >> 24) & 0xFF, // track length
+        (trackLength >> 16) & 0xFF,
+        (trackLength >> 8) & 0xFF,
+        trackLength & 0xFF
+    };
+    fwrite(header, sizeof(header), 1, file);
+}
+
+void writeMidiEvent(FILE* file, MidiEvent* event) {
+    uint8_t buffer[4] = {
+        (event->deltaTime >> 21) & 0x7F,
+        (event->deltaTime >> 14) & 0x7F,
+        (event->deltaTime >> 7) & 0x7F,
+        event->deltaTime & 0x7F
+    };
+    int size = 1;
+    if (event->status >= 0x80 && event->status <= 0xEF) {
+        buffer[size++] = event->status;
+        buffer[size++] = event->data1;
+        if (event->status != 0xC0 && event->status != 0xD0) {
+            buffer[size++] = event->data2;
+        }
+    }
+    else if (event->status == META_EVENT_MARKER) {
+        buffer[size++] = META_EVENT_MARKER;
+        buffer[size++] = event->data1;
+        buffer[size++] = event->data2;
+    }
+    fwrite(buffer, size, 1, file);
+}
+
+int main() {
+    FILE* file = fopen("example.mid", "wb");
+    if (file == NULL) {
+        printf("Error: Failed to open file.\n");
+        return 1;
+    }
+
+    writeMidiHeader(file, 0, 1, 480);
+
+    writeTrackHeader(file, 0); // Placeholder for track length
+
+    MidiEvent events[] = {
+        {0, 0xC0, 0x00, 0x00}, // Program Change to Piano
+        {0, 0x90, 0x3C, 0x60}, //
+
+        */
+
+/*
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <termios.h>
+#include <time.h>
+#include <sys/ioctl.h>
+#include <linux/serial.h>
+#include <linux/soundcard.h>
+#include <linux/types.h>
+#include <alsa/asoundlib.h>
+
+#define NOTE_ON 0x90
+#define NOTE_OFF 0x80
+
+void midiNoteOn(int fd, int chan, int note, int vel)
+{
+    char buf[3];
+    buf[0] = NOTE_ON | chan;
+    buf[1] = note;
+    buf[2] = vel;
+    write(fd, buf, 3);
+}
+
+void midiNoteOff(int fd, int chan, int note)
+{
+    char buf[3];
+    buf[0] = NOTE_OFF | chan;
+    buf[1] = note;
+    buf[2] = 0;
+    write(fd, buf, 3);
+}
+
+int main(int argc, char* argv[])
+{
+    int fd;
+    struct termios options;
+    struct serial_struct serinfo;
+
+    fd = open("/dev/midi1", O_RDWR | O_NOCTTY);
+    if (fd < 0) {
+        printf("error opening MIDI device\n");
+        return 1;
+    }
+
+    tcgetattr(fd, &options);
+    cfsetispeed(&options, B38400);
+    cfsetospeed(&options, B38400);
+    options.c_cflag &= ~CSIZE;
+    options.c_cflag |= CS8;
+    options.c_cflag |= CLOCAL;
+    options.c_cflag |= CREAD;
+    options.c_cflag &= ~PARENB;
+    options.c_cflag &= ~CSTOPB;
+    options.c_cc[VMIN] = 1;
+    options.c_cc[VTIME] = 0;
+    tcsetattr(fd, TCSANOW, &options);
+
+    midiNoteOn(fd, 0, 60, 127); // 미디 노트 ON
+    usleep(500000); // 0.5초 대기
+    midiNoteOff(fd, 0, 60); // 미디 노트 OFF
+
+    close(fd);
+
+    return 0;
+}
+*/
+/*
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <Windows.h> // Windows 운영체제에서 사용
+
+#define C 523 // 도(C) 음의 주파수
+
+int main() {
+    // Windows 운영체제에서 사용하는 키보드 입력 함수
+    // 누를 때마다 호출되어 사용자 입력을 받음
+    while (true) {
+        if (GetAsyncKeyState('1') & 0x8000) { // 1키가 눌렸을 때
+            Beep(C, 500); // 도 음을 0.5초간 연주
+        }
+    }
+
+    return 0;
+}
+*/
+
+/*
+#include <windows.h>
+
+int main() {
+    Beep(261, 500); // 261 Hz, 500ms
+    return 0;
+}
+
+*/
+
+#include <stdio.h>
+#include <Windows.h>
+
+int main()
+{
+    int key;
+    while (1)
+    {
+        key = getch();
+        switch (key)
+        {
+        case '1':
+            Beep(523, 500);  // 도
+            break;
+        case '2':
+            Beep(587, 500);  // 레
+            break;
+        case '3':
+            Beep(659, 500);  // 미
+            break;
+        case '4':
+            Beep(698, 500);  // 파
+            break;
+        case '5':
+            Beep(784, 500);  // 솔
+            break;
+        case '6':
+            Beep(880, 500);  // 라
+            break;
+        case '7':
+            Beep(988, 500);  // 시
+            break;
+        default:
+            break;
+        }
+    }
+    return 0;
+}
+
+/*
+#include <stdio.h>
+#include "portmidi.h"
+
+#define MIDI_FILE "example.mid"
+
+void printMidiEvent(PmEvent event) {
+    Pm_Message msg = Pm_Message(event.message);
+    int status = Pm_MessageStatus(msg);
+    int data1 = Pm_MessageData1(msg);
+    int data2 = Pm_MessageData2(msg);
+
+    printf("Status: 0x%X, Data1: %d, Data2: %d\n", status, data1, data2);
+}
+
+int main() {
+    PmError error;
+    PmStream* midiStream;
+    PmEvent midiEvent;
+
+    // Initialize PortMidi
+    error = Pm_Initialize();
+    if (error != pmNoError) {
+        printf("PortMidi initialization failed: %s\n", Pm_GetErrorText(error));
+        return -1;
+    }
+
+    // Open MIDI input stream
+    error = Pm_OpenInput(&midiStream, PM_DEFAULT_INPUT_DEVICE, NULL, 0, NULL, NULL);
+    if (error != pmNoError) {
+        printf("Failed to open MIDI input: %s\n", Pm_GetErrorText(error));
+        return -1;
+    }
+
+    // Open MIDI file
+    FILE* midiFile = fopen(MIDI_FILE, "rb");
+    if (!midiFile) {
+        printf("Failed to open MIDI file\n");
+        return -1;
+    }
+
+    // Read and print MIDI events
+    while (fread(&midiEvent, sizeof(PmEvent), 1, midiFile) == 1) {
+        printMidiEvent(midiEvent);
+    }
+
+    // Close MIDI file
+    fclose(midiFile);
+
+    // Close MIDI input stream
+    Pm_Close(midiStream);
+
+    // Terminate PortMidi
+    Pm_Terminate();
+
+    return 0;
+}
+*/
+
